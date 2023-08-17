@@ -1,5 +1,5 @@
 using UnityEngine;
-
+using System.Collections;
 public class Circle : MonoBehaviour
 {
     [Tooltip("The position to freeze at when colliding with the Hookspot tag.")]
@@ -17,7 +17,7 @@ public class Circle : MonoBehaviour
         }
     }
 
-    private void OnCollisionEnter2D(Collision2D collision)
+    private void OnTriggerEnter2D(Collider2D collision)
     {
         if (collision.gameObject.CompareTag("Hookspot"))
         {
@@ -25,7 +25,20 @@ public class Circle : MonoBehaviour
             collided = true;
             Invoke("FreezePosition", 0f);
         }
-        else if (collision.gameObject.CompareTag("Ground"))
+        else if (collision.gameObject.CompareTag("Ground") || collision.gameObject.CompareTag("Laser"))
+        {
+            Destroy(gameObject);
+        }
+        else if (collision.gameObject.CompareTag("Gem"))
+        {
+            Debug.Log("Picked up Gem!");
+            Destroy(gameObject);
+        }
+    }
+
+    private void OnColliderEnter2D(Collision2D collision)
+    {
+        if (collision.gameObject.CompareTag("Ground"))
         {
             Destroy(gameObject);
         }

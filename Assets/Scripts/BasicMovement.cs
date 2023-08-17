@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.UI;
 
 public class BasicMovement : MonoBehaviour
 {
@@ -51,10 +52,12 @@ public class BasicMovement : MonoBehaviour
     //Circle circle;
     public bool isGrounded = false, isJumping = false;
     private bool isCrouching = false;
-    public bool isCramped = false, firing = false, hooked = false;
+    public bool isCramped = false, isHit = false, firing = false, hooked = false;
     private float coyoteTimer = 0f;
     public float grappleTimer = 0f, horizontalInput = 0;
-    public Vector2 grapplePosition, mousePosWorld, mousePosView;
+    public Vector2 grapplePosition, mousePosWorld, mousePosView, respawnPosition;
+    int gemCounter;
+    public Text gemAmount;
     private void Start()
     {
         rb = GetComponent<Rigidbody2D>();
@@ -78,16 +81,13 @@ public class BasicMovement : MonoBehaviour
             rb.constraints = RigidbodyConstraints2D.FreezeRotation;
             
         }
-        if (Input.GetKeyDown(KeyCode.Space) && (isGrounded || coyoteTimer > 0f) && !isCramped)
+        if (Input.GetKeyDown(KeyCode.Space) && (isGrounded || coyoteTimer > 0f) && !isCramped && !isJumping)
         {
-            rb.constraints = RigidbodyConstraints2D.FreezeRotation;
-            rb.AddForce(new Vector2(0f, jumpForce), ForceMode2D.Impulse);
             isGrounded = false;
-            isCrouching = false;
-            transform.localScale = new Vector3(transform.localScale.x, 2f, transform.localScale.z);
-            isCrouching = false;
-            rb.mass = 1.2f;
+            isJumping = true;
             coyoteTimer = 0f;
+            resetPlayerBody();
+            rb.AddForce(new Vector2(0f, jumpForce), ForceMode2D.Impulse);
         }
         if (Input.GetKeyDown(KeyCode.Space))
         {
@@ -119,6 +119,7 @@ public class BasicMovement : MonoBehaviour
         if (Input.GetButtonDown("Fire1") && !firing)
         {
             delGrapple();
+            resetPlayerBody();
             Vector3 mousePos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
             mousePos.z = 0f;
             Vector3 direction = (mousePos - transform.position).normalized;
@@ -130,7 +131,7 @@ public class BasicMovement : MonoBehaviour
         }
         if (grapple != null && grapple.GetComponent<Circle>().collided && !hooked)
         {
-            transform.position = Vector2.Lerp(transform.position, grapple.GetComponent<Circle>().freezePosition, Time.deltaTime * 3);
+            transform.position = Vector2.Lerp(transform.position, grapple.GetComponent<Circle>().freezePosition, Time.deltaTime * 4);
         }
         if (grapple != null && Vector3.Distance(grapple.GetComponent<Circle>().freezePosition,transform.position) < 0.7f)
         {
@@ -141,6 +142,14 @@ public class BasicMovement : MonoBehaviour
         {                
             firing = false;
             grappleTimer = 0f;
+        }
+    }
+    void LateUpdate()
+    {
+        if(isHit)
+        {
+            transform.position = respawnPosition;
+            isHit = false;
         }
     }
     private void Run()
@@ -209,11 +218,56 @@ public class BasicMovement : MonoBehaviour
             Destroy(grapple.gameObject);
         }
     }
-    private void OnCollisionEnter2D(Collision2D collision)
+    public void resetPlayerBody()
     {
-
+        transform.localScale = new Vector3(transform.localScale.x, 2f, transform.localScale.z);
+        isCrouching = false;
+        rb.mass = 1.2f;
+        rb.constraints = RigidbodyConstraints2D.FreezeRotation;
     }
-
+    private void OnTriggerEnter2D(Collider2D collision)
+    {
+        if (collision.gameObject.CompareTag("Checkpoint"))
+        {
+            respawnPosition = collision.transform.position;
+            Destroy(collision.gameObject);
+        }
+        else if (collision.gameObject.CompareTag("Laser"))
+        {
+            Destroy(GameObject.FindWithTag("Grapple"));
+            transform.position = respawnPosition;
+        }
+        else if (collision.gameObject.CompareTag("Gem"))
+        {
+            gemCounter += 1;
+            Destroy(collision.gameObject);
+        }
+        else if (collision.gameObject.CompareTag("Hidden"))
+        {
+            collision.gameObject.GetComponent<SpriteRenderer>().color = new Color(1f, 1f, 1f, 0f);
+            for (int i = 0; i < collision.gameObject.transform.childCount; i++)
+            {
+                if (collision.gameObject.transform.GetChild(i) != null)
+                {
+                    collision.gameObject.transform.GetChild(i).GetComponent<SpriteRenderer>().color = new Color(1f, 1f, 1f, 0f);
+                }
+            }
+        }
+    }
+    private void OnTriggerExit2D(Collider2D collision)
+    {
+        if (collision.gameObject.CompareTag("Hidden") && transform.parent == null)
+        {
+            collision.gameObject.GetComponent<SpriteRenderer>().color = new Color(1f, 1f, 1f, 1f);
+            for(int i = 0; i < collision.gameObject.transform.childCount; i++)
+            {
+                if (collision.gameObject.transform.GetChild(i) != null)
+                {
+                    collision.gameObject.transform.GetChild(i).GetComponent<SpriteRenderer>().color = new Color(1f, 1f, 1f, 1f);
+                }
+            }
+        }
+    }
     private void OnDrawGizmos()
     {
         Gizmos.color = Color.red;
@@ -228,10 +282,11 @@ public class BasicMovement : MonoBehaviour
     void FixedUpdate()
     {
         Run();
-        if ((Physics2D.OverlapBox(_groundCheckPoint.position, _groundCheckSize, 0, _groundLayer)) || (Physics2D.OverlapBox(_groundCheckPoint.position, _groundCheckSize, 0, _platformLayer)) || (Physics2D.OverlapBox(_groundCheckPoint.position, _groundCheckSize, 0, _climbingLayer)))
+        if ((Physics2D.OverlapBox(_groundCheckPoint.position, _groundCheckSize, 0, _groundLayer)) || (Physics2D.OverlapBox(_groundCheckPoint.position, _groundCheckSize, 0, _platformLayer)) || (Physics2D.OverlapBox(_groundCheckPoint.position, _groundCheckSize, 0, _climbingLayer)) || (Physics2D.OverlapBox(_groundCheckPoint.position, _groundCheckSize, 0, _crouchLayer)))
         {//If the player has just left the ground they are still "grounded" for a time allowing smoother jumping at ledges
             isGrounded = true;
             coyoteTimer = coyoteTimerDuration;
+            isJumping = false;
         }
         else
         {
@@ -245,5 +300,6 @@ public class BasicMovement : MonoBehaviour
         {
             isCramped = false;
         }
+        gemAmount.text = gemCounter.ToString();
     }
 }
